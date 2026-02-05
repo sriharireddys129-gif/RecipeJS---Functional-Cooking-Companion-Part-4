@@ -1,118 +1,131 @@
+  
+const RecipeApp = (() => {
+  console.log("RecipeApp initializing...");
 
-(() => {
-  // -------------------- STATE --------------------
+  // ---------------- DATA ----------------
   const recipes = [
-    { id: 1, title: "Idli", ingredients: ["rice", "urad dal"], veg: true, description: "Soft steamed cakes" },
-    { id: 2, title: "Dosa", ingredients: ["rice", "dal"], veg: true, description: "Crispy dosa" },
-    { id: 3, title: "Chicken Curry", ingredients: ["chicken", "spices"], veg: false, description: "Spicy curry" }
+    {
+      id: 1,
+      title: "Veg Dosa",
+      ingredients: ["Rice", "Urad dal", "Salt", "Oil"],
+      steps: [
+        "Soak rice and dal",
+        {
+          text: "Prepare batter",
+          substeps: [
+            "Grind soaked rice",
+            "Grind soaked dal",
+            {
+              text: "Ferment batter",
+              substeps: ["Leave overnight", "Check bubbles"]
+            }
+          ]
+        },
+        "Cook dosa on tawa"
+      ]
+    },
+    {
+      id: 2,
+      title: "Tea",
+      ingredients: ["Water", "Tea leaves", "Milk", "Sugar"],
+      steps: [
+        "Boil water",
+        "Add tea leaves",
+        "Add milk and sugar",
+        "Serve hot"
+      ]
+    }
   ];
 
-  let activeFilter = "all";
-  let searchQuery = "";
-  let favorites = JSON.parse(localStorage.getItem("recipeFavorites")) || [];
-
-  // -------------------- DOM --------------------
+  // ---------------- DOM ----------------
   const recipeContainer = document.querySelector("#recipe-container");
-  const filterButtons = document.querySelectorAll("[data-filter]");
-  const searchInput = document.querySelector("#search-input");
-  const clearSearchBtn = document.querySelector("#clear-search");
-  const recipeCounter = document.querySelector("#recipe-counter");
 
-  let debounceTimer;
+  // ---------------- HELPERS ----------------
+  const renderSteps = (steps, level = 0) => {
+    const ul = document.createElement("ul");
 
-  // -------------------- HELPERS --------------------
-  const saveFavorites = () => {
-    localStorage.setItem("recipeFavorites", JSON.stringify(favorites));
+    steps.forEach(step => {
+      const li = document.createElement("li");
+
+      if (typeof step === "string") {
+        li.textContent = step;
+      } else {
+        li.textContent = step.text;
+        li.classList.add("substep");
+        li.appendChild(renderSteps(step.substeps, level + 1));
+      }
+
+      ul.appendChild(li);
+    });
+
+    return ul;
   };
 
-  const toggleFavorite = (id) => {
-    favorites = favorites.includes(id)
-      ? favorites.filter(fid => fid !== id)
-      : [...favorites, id];
-    saveFavorites();
-    updateDisplay();
+  const createStepsHTML = (steps) => {
+    const container = document.createElement("div");
+    container.className = "steps";
+    container.appendChild(renderSteps(steps));
+    return container;
   };
 
-  const createCard = (recipe) => {
+  const createRecipeCard = (recipe) => {
     const card = document.createElement("div");
     card.className = "card";
 
-    const favClass = favorites.includes(recipe.id) ? "favorite active" : "favorite";
-
     card.innerHTML = `
-      <span class="${favClass}" data-id="${recipe.id}">❤️</span>
       <h3>${recipe.title}</h3>
-      <p>${recipe.description}</p>
-      <small>${recipe.ingredients.join(", ")}</small>
+      <button class="toggle-btn" data-id="${recipe.id}" data-toggle="steps">Show Steps</button>
+      <button class="toggle-btn" data-id="${recipe.id}" data-toggle="ingredients">Show Ingredients</button>
+
+      <div class="steps-container" data-id="${recipe.id}"></div>
+      <div class="ingredients-container" data-id="${recipe.id}">
+        <ul>
+          ${recipe.ingredients.map(i => `<li>${i}</li>`).join("")}
+        </ul>
+      </div>
     `;
+
+    const stepsContainer = card.querySelector(".steps-container");
+    stepsContainer.appendChild(createStepsHTML(recipe.steps));
 
     return card;
   };
 
-  const applySearch = (data) => {
-    if (!searchQuery) return data;
-    const q = searchQuery.toLowerCase();
-    return data.filter(r =>
-      r.title.toLowerCase().includes(q) ||
-      r.ingredients.some(i => i.toLowerCase().includes(q)) ||
-      r.description.toLowerCase().includes(q)
-    );
-  };
-
-  const applyFilter = (data) => {
-    if (activeFilter === "veg") return data.filter(r => r.veg);
-    if (activeFilter === "favorites") return data.filter(r => favorites.includes(r.id));
-    return data;
-  };
-
-  const updateCounter = (count, total) => {
-    recipeCounter.textContent = `Showing ${count} of ${total} recipes`;
-  };
-
-  const render = (data) => {
+  const renderRecipes = () => {
     recipeContainer.innerHTML = "";
-    data.forEach(r => recipeContainer.appendChild(createCard(r)));
-    updateCounter(data.length, recipes.length);
+    recipes.forEach(r => recipeContainer.appendChild(createRecipeCard(r)));
   };
 
-  const updateDisplay = () => {
-    let data = applySearch(recipes);
-    data = applyFilter(data);
-    render(data);
+  const handleToggleClick = (e) => {
+    if (!e.target.classList.contains("toggle-btn")) return;
+
+    const recipeId = e.target.dataset.id;
+    const toggleType = e.target.dataset.toggle;
+
+    const container = document.querySelector(
+      `.${toggleType}-container[data-id="${recipeId}"]`
+    );
+
+    container.classList.toggle("visible");
+    e.target.textContent = container.classList.contains("visible")
+      ? `Hide ${toggleType.charAt(0).toUpperCase() + toggleType.slice(1)}`
+      : `Show ${toggleType.charAt(0).toUpperCase() + toggleType.slice(1)}`;
   };
 
-  // -------------------- EVENTS --------------------
-  filterButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      filterButtons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      activeFilter = btn.dataset.filter;
-      updateDisplay();
-    });
-  });
+  // ---------------- EVENTS ----------------
+  const setupEventListeners = () => {
+    recipeContainer.addEventListener("click", handleToggleClick);
+    console.log("Event listeners attached!");
+  };
 
-  searchInput.addEventListener("input", () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      searchQuery = searchInput.value.trim();
-      clearSearchBtn.hidden = !searchQuery;
-      updateDisplay();
-    }, 300);
-  });
+  // ---------------- INIT ----------------
+  const init = () => {
+    renderRecipes();
+    setupEventListeners();
+    console.log("RecipeApp ready!");
+  };
 
-  clearSearchBtn.addEventListener("click", () => {
-    searchInput.value = "";
-    searchQuery = "";
-    clearSearchBtn.hidden = true;
-    updateDisplay();
-  });
-
-  recipeContainer.addEventListener("click", (e) => {
-    if (e.target.classList.contains("favorite")) {
-      toggleFavorite(Number(e.target.dataset.id));
-    }
-  });
-
-  // -------------------- INIT --------------------
-  updateDisplay();
+  return { init };
 })();
+
+RecipeApp.init();
